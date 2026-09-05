@@ -36,3 +36,18 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# TypeScript caches and temporary files
+*.tsbuildinfo
+*.tmp
+*.temp
+*.log
+/build/
+/tmp/
+/temp/
+# Private keys and credentials
+*.key
+*.p12
+*.pfx
+credentials*.json
+secrets*.json
