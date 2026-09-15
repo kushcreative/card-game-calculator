@@ -63,11 +63,11 @@ export function useGameTools(
                   },
                   actual: {
                     oneOf: [
-                      { type: 'integer', minimum: 0 },
+                      { type: 'integer', minimum: 0, maximum: 13 },
                       { type: 'string', pattern: '^[0-9]+$' },
                     ],
                     description:
-                      'A non-negative whole-number actual-win count. The game validates the combined total across all players and rounds.',
+                      'A non-negative whole-number actual-win count from 0 through 13 per player. The game also validates the combined total across all players and rounds.',
                   },
                 },
                 required: ['playerId', 'bid', 'actual'],
