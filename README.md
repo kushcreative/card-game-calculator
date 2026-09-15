@@ -18,7 +18,7 @@ Saving Round 5 displays the final ranking, winner (or tied winners), final score
 | Actual Won < Bid | Actual Won − Bid                             | 4 / 1 → −3 |
 | Actual Won = Bid | Bid + Actual Won (existing exact-match rule) | 2 / 2 → +4 |
 
-Bids are non-negative whole numbers with no game-imposed maximum. Actual wins are whole numbers from 0 through 13 and stop at 13. Empty and invalid entries cannot be saved. Zero / zero scores zero. The separate bid and actual-win validators, scoring rules, five-round limit, and cumulative total calculation are isolated in `app/scoring.ts` for future special-case changes.
+Bids and actual wins are separate non-negative whole-number values. Bids keep their existing uncapped behavior. Actual wins are distributed across all players and saved rounds; the running total cannot exceed 13, and completing Round 5 requires the combined total to equal exactly 13. Empty and invalid entries cannot be saved. Zero / zero scores zero. The separate bid and actual-win validators, total-win validation, scoring rules, five-round limit, and cumulative total calculation are isolated in `app/scoring.ts` for future special-case changes.
 
 ## Install and run
 
@@ -40,7 +40,7 @@ npm run test
 npm run build
 ```
 
-The tests cover both supplied scoring examples, the 13-win maximum, uncapped and precision-safe bids, exact matches, invalid inputs, five-round progression, total replacement when editing a saved round, and empty state.
+The tests cover both supplied scoring examples, distributed actual wins totaling exactly 13, uncapped and precision-safe bids, exact matches, invalid inputs, five-round progression, total replacement when editing a saved round, and empty state.
 
 ## Production
 

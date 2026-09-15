@@ -61,7 +61,14 @@ export function useGameTools(
                     description:
                       'A non-negative whole-number bid. Use a string for values outside the safe JSON integer range.',
                   },
-                  actual: { type: 'integer', minimum: 0, maximum: 13 },
+                  actual: {
+                    oneOf: [
+                      { type: 'integer', minimum: 0 },
+                      { type: 'string', pattern: '^[0-9]+$' },
+                    ],
+                    description:
+                      'A non-negative whole-number actual-win count. The game validates the combined total across all players and rounds.',
+                  },
                 },
                 required: ['playerId', 'bid', 'actual'],
                 additionalProperties: false,

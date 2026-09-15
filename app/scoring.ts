@@ -1,10 +1,9 @@
 export const ROUND_COUNT = 5;
-export const MAX_ACTUAL_WINS = 13;
+export const TOTAL_ACTUAL_WINS = 13;
 export type Entry = { bid: string; actual: string };
 export type Round = { entries: Record<string, Entry>; saved: boolean };
 export const validBid = (value: string) => /^\d+$/.test(value);
-export const validActual = (value: string) =>
-  /^\d+$/.test(value) && BigInt(value) <= BigInt(MAX_ACTUAL_WINS);
+export const validActual = (value: string) => /^\d+$/.test(value);
 // Exact matches follow the supplied examples: 2 / 2 = +4.
 export function score(entry?: Entry) {
   if (!entry || !validBid(entry.bid) || !validActual(entry.actual)) return 0n;
@@ -32,14 +31,43 @@ export function commitRound(
     )
   )
     throw new Error(
-      `Enter a non-negative whole-number bid and actual wins from 0–${MAX_ACTUAL_WINS} for every player.`,
+      'Enter a non-negative whole-number bid and actual wins for every player.',
     );
   if (rounds.slice(0, index).some((r) => !r.saved))
     throw new Error('Save the earlier rounds first.');
-  return rounds.map((r, i) =>
+  const nextRounds = rounds.map((r, i) =>
     i === index ? { entries: structuredClone(entries), saved: true } : r,
   );
+  const actualTotal = actualWinsTotal(nextRounds, playerIds);
+  if (actualTotal > BigInt(TOTAL_ACTUAL_WINS))
+    throw new Error(
+      `Actual wins across the game cannot exceed ${TOTAL_ACTUAL_WINS}. Distribute the remaining wins among the players.`,
+    );
+  if (
+    nextRounds.every((round) => round.saved) &&
+    actualTotal !== BigInt(TOTAL_ACTUAL_WINS)
+  )
+    throw new Error(
+      `The game is complete only when all players' actual wins total exactly ${TOTAL_ACTUAL_WINS}.`,
+    );
+  return nextRounds;
 }
+export const actualWinsTotal = (rounds: Round[], playerIds: string[]) =>
+  rounds.reduce(
+    (total, round) =>
+      total +
+      (round.saved
+        ? playerIds.reduce(
+            (roundTotal, id) =>
+              roundTotal +
+              (validActual(round.entries[id]?.actual ?? '')
+                ? BigInt(round.entries[id].actual)
+                : 0n),
+            0n,
+          )
+        : 0n),
+    0n,
+  );
 export const cumulative = (rounds: Round[], id: string) =>
   rounds.reduce(
     (total, round) => total + (round.saved ? score(round.entries[id]) : 0n),
