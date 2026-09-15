@@ -3,13 +3,14 @@ import { useState } from 'react';
 import { useGameTools } from './game-tools';
 import {
   ROUND_COUNT,
-  MAX_ACTUAL_WINS,
+  TOTAL_ACTUAL_WINS,
   validBid,
   validActual,
   score,
   newGame,
   commitRound,
   cumulative,
+  actualWinsTotal,
   type Entry,
   type Round,
 } from './scoring';
@@ -74,6 +75,10 @@ export default function Home() {
   const total = (id: string) => cumulative(saved, id);
   const completed = saved.filter((r) => r.saved).length;
   const finished = completed === ROUND_COUNT;
+  const actualTotal = actualWinsTotal(
+    saved,
+    players.map((p) => p.id),
+  );
   const firstOpen = saved.findIndex((r) => !r.saved);
   const canVisit = (i: number) =>
     i >= 0 && i < ROUND_COUNT && (firstOpen === -1 || i <= firstOpen);
@@ -122,7 +127,7 @@ export default function Home() {
         entries?: {
           playerId: string;
           bid: number | string;
-          actual: number;
+          actual: number | string;
         }[];
       };
       if (
@@ -144,9 +149,12 @@ export default function Home() {
               e.bid >= 0) ||
             (typeof e.bid === 'string' && validBid(e.bid))
           ) ||
-          !Number.isInteger(e.actual) ||
-          e.actual < 0 ||
-          e.actual > MAX_ACTUAL_WINS
+          !(
+            (typeof e.actual === 'number' &&
+              Number.isSafeInteger(e.actual) &&
+              e.actual >= 0) ||
+            (typeof e.actual === 'string' && validActual(e.actual))
+          )
         )
           throw new Error('Invalid player or score.');
         entries[e.playerId] = { bid: String(e.bid), actual: String(e.actual) };
@@ -442,31 +450,17 @@ export default function Home() {
                     <TableCell key={key}>
                       <div className="number-field">
                         <input
-                          className={`number ${
-                            key === 'actual' &&
-                            round.entries[p.id]?.actual ===
-                              String(MAX_ACTUAL_WINS)
-                              ? 'maximum-wins'
-                              : ''
-                          }`}
+                          className="number"
                           type="text"
                           inputMode="numeric"
                           pattern="[0-9]*"
-                          maxLength={key === 'actual' ? 2 : undefined}
                           aria-label={`${p.name} ${
-                            key === 'actual'
-                              ? 'actual wins (maximum 13)'
-                              : 'bid'
+                            key === 'actual' ? 'actual wins' : 'bid'
                           }`}
                           placeholder="0"
                           value={round.entries[p.id]?.[key] ?? ''}
                           onChange={(e) => edit(p.id, key, e.target.value)}
                         />
-                        {key === 'actual' &&
-                          round.entries[p.id]?.actual ===
-                            String(MAX_ACTUAL_WINS) && (
-                            <span className="max-wins-label">MAX</span>
-                          )}
                       </div>
                     </TableCell>
                   ))}
@@ -518,6 +512,13 @@ export default function Home() {
               <span className="rule-divider" />
               <span>
                 Actual &lt; Bid: <b className="negative">Actual − Bid</b>
+              </span>
+              <span className="rule-divider" />
+              <span>
+                Actual wins:{' '}
+                <b>
+                  {actualTotal.toString()} / {TOTAL_ACTUAL_WINS}
+                </b>
               </span>
             </div>
           </div>
@@ -720,7 +721,8 @@ export default function Home() {
               <p>
                 An exact match uses the addition rule: a bid of 2 and actual of
                 2 earns +4. Bids are non-negative whole numbers with no game
-                cap. Actual wins must be a whole number from 0 to 13.
+                cap. The combined actual wins across all players and rounds must
+                total exactly 13 when the game is complete.
               </p>
               <p>
                 Totals and standings include saved rounds only. Saving

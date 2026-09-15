@@ -365,21 +365,6 @@ small {
   color: #e4ebe4;
   font-size: 16px;
 }
-.number.maximum-wins {
-  border-color: #a88c4d;
-  color: #ead39a;
-  padding-right: 34px;
-  box-shadow: 0 0 0 1px #a88c4d33;
-}
-.max-wins-label {
-  position: absolute;
-  right: 7px;
-  color: #d2b66f;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.6px;
-  pointer-events: none;
-}
 .score {
   display: inline-block;
   min-width: 46px;

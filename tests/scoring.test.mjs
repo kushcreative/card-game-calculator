@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import {
-  MAX_ACTUAL_WINS,
+  TOTAL_ACTUAL_WINS,
   score,
   validActual,
   validBid,
   newGame,
   commitRound,
   cumulative,
+  actualWinsTotal,
 } from '../app/scoring.ts';
 
 for (const [bid, actual, expected] of [
@@ -21,12 +22,12 @@ for (const [bid, actual, expected] of [
   assert.equal(score({ bid: String(bid), actual: String(actual) }), expected);
 }
 
-assert.equal(MAX_ACTUAL_WINS, 13);
+assert.equal(TOTAL_ACTUAL_WINS, 13);
 assert.equal(validActual('13'), true);
-assert.equal(validActual('14'), false);
-assert.equal(validActual('999'), false);
+assert.equal(validActual('14'), true);
+assert.equal(validActual('999'), true);
 assert.equal(score({ bid: '1', actual: '13' }), 14n);
-assert.equal(score({ bid: '1', actual: '14' }), 0n);
+assert.equal(score({ bid: '1', actual: '14' }), 15n);
 
 assert.equal(validBid('13'), true);
 assert.equal(validBid('14'), true);
@@ -43,29 +44,64 @@ for (const value of ['', '-1', 'NaN', 'Infinity', '1.5']) {
 }
 
 let game = newGame();
+const players = ['a', 'b'];
 assert.equal(game.length, 5);
+assert.equal(actualWinsTotal(game, players), 0n);
 assert.equal(cumulative(game, 'a'), 0n);
 assert.throws(() =>
-  commitRound(game, 1, ['a'], { a: { bid: '1', actual: '4' } }),
+  commitRound(game, 1, players, {
+    a: { bid: '1', actual: '4' },
+    b: { bid: '1', actual: '4' },
+  }),
 );
 assert.throws(() =>
-  commitRound(game, 0, ['a'], { a: { bid: '', actual: '4' } }),
+  commitRound(game, 0, players, {
+    a: { bid: '', actual: '4' },
+    b: { bid: '1', actual: '1' },
+  }),
 );
-assert.throws(() =>
-  commitRound(game, 0, ['a'], { a: { bid: '1', actual: '14' } }),
-);
-for (let i = 0; i < 5; i++) {
-  game = commitRound(game, i, ['a'], { a: { bid: '1', actual: '4' } });
+
+const rounds = [
+  [3, 2],
+  [1, 2],
+  [0, 1],
+  [2, 1],
+  [1, 0],
+];
+for (let i = 0; i < rounds.length; i++) {
+  const [a, b] = rounds[i];
+  game = commitRound(game, i, players, {
+    a: { bid: '1', actual: String(a) },
+    b: { bid: '1', actual: String(b) },
+  });
 }
-assert.equal(cumulative(game, 'a'), 25n);
+assert.equal(actualWinsTotal(game, players), 13n);
+assert.equal(cumulative(game, 'a'), 10n);
+assert.equal(cumulative(game, 'b'), 9n);
 assert.ok(game.every((round) => round.saved));
 assert.throws(() =>
-  commitRound(game, 5, ['a'], { a: { bid: '1', actual: '4' } }),
+  commitRound(game, 5, players, {
+    a: { bid: '1', actual: '1' },
+    b: { bid: '1', actual: '0' },
+  }),
 );
-game = commitRound(game, 0, ['a'], { a: { bid: '4', actual: '1' } });
-assert.equal(cumulative(game, 'a'), 17n);
-assert.equal(cumulative(newGame(), 'a'), 0n);
+
+const incomplete = newGame();
+let partial = incomplete;
+for (let i = 0; i < 4; i++) {
+  partial = commitRound(partial, i, players, {
+    a: { bid: '1', actual: '1' },
+    b: { bid: '1', actual: '1' },
+  });
+}
+assert.equal(actualWinsTotal(partial, players), 8n);
+assert.throws(() =>
+  commitRound(partial, 4, players, {
+    a: { bid: '1', actual: '0' },
+    b: { bid: '1', actual: '1' },
+  }),
+);
 
 console.log(
-  'Passed: actual wins stop at 13, bids remain uncapped, large bids retain precision, scoring examples, five-round flow, cumulative totals, round replacement, and reset.',
+  'Passed: distributed actual wins total exactly 13, no individual actual cap, uncapped bids, precision-safe scoring, five-round validation, cumulative totals, and empty reset state.',
 );
