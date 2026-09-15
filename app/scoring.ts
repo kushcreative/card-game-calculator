@@ -1,9 +1,12 @@
 export const ROUND_COUNT = 5;
+// Preserve the game's per-player limit while enforcing the separate table-wide total below.
+export const MAX_ACTUAL_WINS = 13;
 export const TOTAL_ACTUAL_WINS = 13;
 export type Entry = { bid: string; actual: string };
 export type Round = { entries: Record<string, Entry>; saved: boolean };
 export const validBid = (value: string) => /^\d+$/.test(value);
-export const validActual = (value: string) => /^\d+$/.test(value);
+export const validActual = (value: string) =>
+  /^\d+$/.test(value) && BigInt(value) <= BigInt(MAX_ACTUAL_WINS);
 // Exact matches follow the supplied examples: 2 / 2 = +4.
 export function score(entry?: Entry) {
   if (!entry || !validBid(entry.bid) || !validActual(entry.actual)) return 0n;
@@ -31,7 +34,7 @@ export function commitRound(
     )
   )
     throw new Error(
-      'Enter a non-negative whole-number bid and actual wins for every player.',
+      `Enter a non-negative whole-number bid and actual wins from 0–${MAX_ACTUAL_WINS} for every player.`,
     );
   if (rounds.slice(0, index).some((r) => !r.saved))
     throw new Error('Save the earlier rounds first.');

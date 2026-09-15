@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   TOTAL_ACTUAL_WINS,
+  MAX_ACTUAL_WINS,
   score,
   validActual,
   validBid,
@@ -23,11 +24,12 @@ for (const [bid, actual, expected] of [
 }
 
 assert.equal(TOTAL_ACTUAL_WINS, 13);
+assert.equal(MAX_ACTUAL_WINS, 13);
 assert.equal(validActual('13'), true);
-assert.equal(validActual('14'), true);
-assert.equal(validActual('999'), true);
+assert.equal(validActual('14'), false);
+assert.equal(validActual('999'), false);
 assert.equal(score({ bid: '1', actual: '13' }), 14n);
-assert.equal(score({ bid: '1', actual: '14' }), 15n);
+assert.equal(score({ bid: '1', actual: '14' }), 0n);
 
 assert.equal(validBid('13'), true);
 assert.equal(validBid('14'), true);
@@ -152,5 +154,5 @@ assert.throws(finishWithDistribution([3, 4, 2, 3])); // total 12
 assert.throws(finishWithDistribution([4, 4, 3, 4])); // total 15
 
 console.log(
-  'Passed: distributed actual wins total exactly 13, no individual actual cap, uncapped bids, precision-safe scoring, five-round validation, cumulative totals, and empty reset state.',
+  'Passed: per-player actual-win limit, distributed total exactly 13, uncapped bids, precision-safe scoring, five-round validation, cumulative totals, and empty reset state.',
 );
