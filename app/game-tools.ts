@@ -67,7 +67,7 @@ export function useGameTools(
                       { type: 'string', pattern: '^[0-9]+$' },
                     ],
                     description:
-                      'A non-negative whole-number actual-win count from 0 through 13 per player. The game also validates the combined total across all players and rounds.',
+                      'A non-negative whole-number actual-win count from 0 through 13 per player. Four-player games also validate the combined total across all players and rounds.',
                   },
                 },
                 required: ['playerId', 'bid', 'actual'],
