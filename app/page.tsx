@@ -79,6 +79,7 @@ export default function Home() {
     saved,
     players.map((p) => p.id),
   );
+  const usesFourPlayerRules = players.length === 4;
   const firstOpen = saved.findIndex((r) => !r.saved);
   const canVisit = (i: number) =>
     i >= 0 && i < ROUND_COUNT && (firstOpen === -1 || i <= firstOpen);
@@ -517,7 +518,8 @@ export default function Home() {
               <span>
                 Actual wins:{' '}
                 <b>
-                  {actualTotal.toString()} / {TOTAL_ACTUAL_WINS}
+                  {actualTotal.toString()}
+                  {usesFourPlayerRules ? ` / ${TOTAL_ACTUAL_WINS}` : ''}
                 </b>
               </span>
             </div>
@@ -721,8 +723,9 @@ export default function Home() {
               <p>
                 An exact match uses the addition rule: a bid of 2 and actual of
                 2 earns +4. Bids are non-negative whole numbers with no game
-                cap. The combined actual wins across all players and rounds must
-                total exactly 13 when the game is complete.
+                cap. In a four-player game, the combined actual wins across all
+                players and rounds must total exactly 13 when the game is
+                complete.
               </p>
               <p>
                 Totals and standings include saved rounds only. Saving

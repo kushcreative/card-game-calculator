@@ -26,6 +26,7 @@ export function commitRound(
     throw new Error('Invalid round.');
   if (
     !playerIds.length ||
+    new Set(playerIds).size !== playerIds.length ||
     playerIds.some(
       (id) =>
         !entries[id] ||
@@ -34,19 +35,21 @@ export function commitRound(
     )
   )
     throw new Error(
-      `Enter a non-negative whole-number bid and actual wins from 0–${MAX_ACTUAL_WINS} for every player.`,
+      `Use each player once and enter a non-negative whole-number bid and actual wins from 0–${MAX_ACTUAL_WINS} for every player.`,
     );
   if (rounds.slice(0, index).some((r) => !r.saved))
     throw new Error('Save the earlier rounds first.');
   const nextRounds = rounds.map((r, i) =>
     i === index ? { entries: structuredClone(entries), saved: true } : r,
   );
+  const usesFourPlayerRules = playerIds.length === 4;
   const actualTotal = actualWinsTotal(nextRounds, playerIds);
-  if (actualTotal > BigInt(TOTAL_ACTUAL_WINS))
+  if (usesFourPlayerRules && actualTotal > BigInt(TOTAL_ACTUAL_WINS))
     throw new Error(
       `Actual wins across the game cannot exceed ${TOTAL_ACTUAL_WINS}. Distribute the remaining wins among the players.`,
     );
   if (
+    usesFourPlayerRules &&
     nextRounds.every((round) => round.saved) &&
     actualTotal !== BigInt(TOTAL_ACTUAL_WINS)
   )
