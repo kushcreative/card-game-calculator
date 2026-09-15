@@ -53,8 +53,15 @@ export function useGameTools(
                 type: 'object',
                 properties: {
                   playerId: { type: 'string' },
-                  bid: { type: 'integer', minimum: 0, maximum: 999 },
-                  actual: { type: 'integer', minimum: 0, maximum: 999 },
+                  bid: {
+                    oneOf: [
+                      { type: 'integer', minimum: 0 },
+                      { type: 'string', pattern: '^[0-9]+$' },
+                    ],
+                    description:
+                      'A non-negative whole-number bid. Use a string for values outside the safe JSON integer range.',
+                  },
+                  actual: { type: 'integer', minimum: 0, maximum: 13 },
                 },
                 required: ['playerId', 'bid', 'actual'],
                 additionalProperties: false,

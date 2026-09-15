@@ -12,13 +12,13 @@ Saving Round 5 displays the final ranking, winner (or tied winners), final score
 
 ## Scoring
 
-| Condition | Round score | Example |
-| --- | --- | --- |
-| Actual Won > Bid | Bid + Actual Won | 1 / 4 → +5 |
-| Actual Won < Bid | Actual Won − Bid | 4 / 1 → −3 |
+| Condition        | Round score                                  | Example    |
+| ---------------- | -------------------------------------------- | ---------- |
+| Actual Won > Bid | Bid + Actual Won                             | 1 / 4 → +5 |
+| Actual Won < Bid | Actual Won − Bid                             | 4 / 1 → −3 |
 | Actual Won = Bid | Bid + Actual Won (existing exact-match rule) | 2 / 2 → +4 |
 
-Inputs must be whole numbers from 0 to 999. Empty and invalid entries cannot be saved. Zero / zero scores zero. The scoring rules, validation, five-round limit, and cumulative total calculation are isolated in `app/scoring.ts` for future special-case changes.
+Bids are non-negative whole numbers with no game-imposed maximum. Actual wins are whole numbers from 0 through 13 and stop at 13. Empty and invalid entries cannot be saved. Zero / zero scores zero. The separate bid and actual-win validators, scoring rules, five-round limit, and cumulative total calculation are isolated in `app/scoring.ts` for future special-case changes.
 
 ## Install and run
 
@@ -40,7 +40,7 @@ npm run test
 npm run build
 ```
 
-The tests cover both supplied scoring examples, exact matches, invalid inputs, five-round progression, total replacement when editing a saved round, and empty state.
+The tests cover both supplied scoring examples, the 13-win maximum, uncapped and precision-safe bids, exact matches, invalid inputs, five-round progression, total replacement when editing a saved round, and empty state.
 
 ## Production
 
@@ -59,7 +59,7 @@ The existing Sites deployment is configured in `.openai/hosting.json`. Its proje
 - `app/scoring.ts`: rules and round data operations.
 - `app/game-tools.ts`: optional browser WebMCP integration, feature-detected.
 - `app/globals.css`: existing premium dark styling and responsive layout.
-- `components/ui/`, `hooks/`, `lib/`: shared interface primitives and helpers.
+- `components/ui/`, `lib/`: shared interface primitives and helpers used by the app.
 - `public/`: application icon.
 - `tests/`: automated scoring and game-state checks.
 

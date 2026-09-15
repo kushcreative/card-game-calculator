@@ -1,13 +1,15 @@
 export const ROUND_COUNT = 5;
+export const MAX_ACTUAL_WINS = 13;
 export type Entry = { bid: string; actual: string };
 export type Round = { entries: Record<string, Entry>; saved: boolean };
-export const valid = (value: string) =>
-  /^\d+$/.test(value) && Number(value) <= 999;
+export const validBid = (value: string) => /^\d+$/.test(value);
+export const validActual = (value: string) =>
+  /^\d+$/.test(value) && BigInt(value) <= BigInt(MAX_ACTUAL_WINS);
 // Exact matches follow the supplied examples: 2 / 2 = +4.
 export function score(entry?: Entry) {
-  if (!entry || !valid(entry.bid) || !valid(entry.actual)) return 0;
-  const bid = Number(entry.bid),
-    actual = Number(entry.actual);
+  if (!entry || !validBid(entry.bid) || !validActual(entry.actual)) return 0n;
+  const bid = BigInt(entry.bid),
+    actual = BigInt(entry.actual);
   return actual >= bid ? bid + actual : actual - bid;
 }
 export const blankRound = (): Round => ({ entries: {}, saved: false });
@@ -24,10 +26,14 @@ export function commitRound(
     !playerIds.length ||
     playerIds.some(
       (id) =>
-        !entries[id] || !valid(entries[id].bid) || !valid(entries[id].actual),
+        !entries[id] ||
+        !validBid(entries[id].bid) ||
+        !validActual(entries[id].actual),
     )
   )
-    throw new Error('Enter a bid and actual result for every player (0–999).');
+    throw new Error(
+      `Enter a non-negative whole-number bid and actual wins from 0–${MAX_ACTUAL_WINS} for every player.`,
+    );
   if (rounds.slice(0, index).some((r) => !r.saved))
     throw new Error('Save the earlier rounds first.');
   return rounds.map((r, i) =>
@@ -36,6 +42,6 @@ export function commitRound(
 }
 export const cumulative = (rounds: Round[], id: string) =>
   rounds.reduce(
-    (total, round) => total + (round.saved ? score(round.entries[id]) : 0),
-    0,
+    (total, round) => total + (round.saved ? score(round.entries[id]) : 0n),
+    0n,
   );

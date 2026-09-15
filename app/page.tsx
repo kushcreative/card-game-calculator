@@ -3,7 +3,9 @@ import { useState } from 'react';
 import { useGameTools } from './game-tools';
 import {
   ROUND_COUNT,
-  valid,
+  MAX_ACTUAL_WINS,
+  validBid,
+  validActual,
   score,
   newGame,
   commitRound,
@@ -52,9 +54,9 @@ import {
 type Player = { id: string; name: string };
 const empty = (): Entry => ({ bid: '', actual: '' });
 
-const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
-const tone = (n: number) =>
-  n > 0 ? 'positive' : n < 0 ? 'negative' : 'neutral';
+const signed = (n: bigint) => (n > 0n ? `+${n}` : String(n));
+const tone = (n: bigint) =>
+  n > 0n ? 'positive' : n < 0n ? 'negative' : 'neutral';
 export default function Home() {
   const [players, setPlayers] = useState<Player[]>([]),
     [rounds, setRounds] = useState<Round[]>(newGame),
@@ -100,18 +102,28 @@ export default function Home() {
       setIndex(index + 1);
     }
   }
-  const ranked = [...players].sort((a, b) => total(b.id) - total(a.id));
+  const ranked = [...players].sort((a, b) => {
+    const difference = total(b.id) - total(a.id);
+    return difference > 0n ? 1 : difference < 0n ? -1 : 0;
+  });
   const leaders = ranked.filter((p) => total(p.id) === total(ranked[0]?.id));
   useGameTools(
     () => ({
       players,
       rounds,
       currentRound: index + 1,
-      totals: players.map((p) => ({ ...p, total: total(p.id) })),
+      totals: players.map((p) => ({
+        ...p,
+        total: total(p.id).toString(),
+      })),
     }),
     (input) => {
       const data = input as {
-        entries?: { playerId: string; bid: number; actual: number }[];
+        entries?: {
+          playerId: string;
+          bid: number | string;
+          actual: number;
+        }[];
       };
       if (
         !data ||
@@ -126,12 +138,15 @@ export default function Home() {
           !e ||
           !players.some((p) => p.id === e.playerId) ||
           entries[e.playerId] ||
-          !Number.isInteger(e.bid) ||
+          !(
+            (typeof e.bid === 'number' &&
+              Number.isSafeInteger(e.bid) &&
+              e.bid >= 0) ||
+            (typeof e.bid === 'string' && validBid(e.bid))
+          ) ||
           !Number.isInteger(e.actual) ||
-          e.bid < 0 ||
           e.actual < 0 ||
-          e.bid > 999 ||
-          e.actual > 999
+          e.actual > MAX_ACTUAL_WINS
         )
           throw new Error('Invalid player or score.');
         entries[e.playerId] = { bid: String(e.bid), actual: String(e.actual) };
@@ -141,7 +156,8 @@ export default function Home() {
     },
   );
   function edit(id: string, key: keyof Entry, value: string) {
-    if (value !== '' && !valid(value)) return;
+    const isValid = key === 'bid' ? validBid(value) : validActual(value);
+    if (value !== '' && !isValid) return;
     setRounds((rs) =>
       rs.map((r, i) =>
         i === index
@@ -424,16 +440,34 @@ export default function Home() {
                   </TableCell>
                   {(['bid', 'actual'] as const).map((key) => (
                     <TableCell key={key}>
-                      <input
-                        className="number"
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        aria-label={`${p.name} ${key}`}
-                        placeholder="0"
-                        value={round.entries[p.id]?.[key] ?? ''}
-                        onChange={(e) => edit(p.id, key, e.target.value)}
-                      />
+                      <div className="number-field">
+                        <input
+                          className={`number ${
+                            key === 'actual' &&
+                            round.entries[p.id]?.actual ===
+                              String(MAX_ACTUAL_WINS)
+                              ? 'maximum-wins'
+                              : ''
+                          }`}
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          maxLength={key === 'actual' ? 2 : undefined}
+                          aria-label={`${p.name} ${
+                            key === 'actual'
+                              ? 'actual wins (maximum 13)'
+                              : 'bid'
+                          }`}
+                          placeholder="0"
+                          value={round.entries[p.id]?.[key] ?? ''}
+                          onChange={(e) => edit(p.id, key, e.target.value)}
+                        />
+                        {key === 'actual' &&
+                          round.entries[p.id]?.actual ===
+                            String(MAX_ACTUAL_WINS) && (
+                            <span className="max-wins-label">MAX</span>
+                          )}
+                      </div>
                     </TableCell>
                   ))}
                   <TableCell>
@@ -685,8 +719,8 @@ export default function Home() {
               </p>
               <p>
                 An exact match uses the addition rule: a bid of 2 and actual of
-                2 earns +4. Bids and actual results must be whole numbers from 0
-                to 999.
+                2 earns +4. Bids are non-negative whole numbers with no game
+                cap. Actual wins must be a whole number from 0 to 13.
               </p>
               <p>
                 Totals and standings include saved rounds only. Saving
