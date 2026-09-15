@@ -62,6 +62,11 @@ assert.throws(() =>
     b: { bid: '1', actual: '1' },
   }),
 );
+assert.throws(() =>
+  commitRound(game, 0, ['a', 'a'], {
+    a: { bid: '1', actual: '1' },
+  }),
+);
 
 const rounds = [
   [3, 2],
@@ -97,12 +102,12 @@ for (let i = 0; i < 4; i++) {
   });
 }
 assert.equal(actualWinsTotal(partial, players), 8n);
-assert.throws(() =>
-  commitRound(partial, 4, players, {
-    a: { bid: '1', actual: '0' },
-    b: { bid: '1', actual: '1' },
-  }),
-);
+partial = commitRound(partial, 4, players, {
+  a: { bid: '1', actual: '0' },
+  b: { bid: '1', actual: '1' },
+});
+assert.equal(actualWinsTotal(partial, players), 9n);
+assert.ok(partial.every((round) => round.saved));
 
 // A complete four-player game accepts a natural 3 + 4 + 2 + 4 distribution.
 const fourPlayers = ['kush', 'aman', 'rohit', 'sarthak'];
@@ -153,6 +158,55 @@ const finishWithDistribution = (actuals) => {
 assert.throws(finishWithDistribution([3, 4, 2, 3])); // total 12
 assert.throws(finishWithDistribution([4, 4, 3, 4])); // total 15
 
+// Player counts other than four keep their existing behavior and do not inherit
+// the four-player combined-total rule.
+for (const playerIds of [
+  ['a', 'b', 'c'],
+  ['a', 'b', 'c', 'd', 'e'],
+]) {
+  let otherGame = newGame();
+  for (let roundIndex = 0; roundIndex < otherGame.length; roundIndex++) {
+    otherGame = commitRound(
+      otherGame,
+      roundIndex,
+      playerIds,
+      Object.fromEntries(
+        playerIds.map((id) => [id, { bid: '20', actual: '1' }]),
+      ),
+    );
+  }
+  assert.equal(
+    actualWinsTotal(otherGame, playerIds),
+    BigInt(playerIds.length * 5),
+  );
+  assert.ok(otherGame.every((round) => round.saved));
+}
+
+let changedPlayerCountGame = newGame();
+changedPlayerCountGame = commitRound(
+  changedPlayerCountGame,
+  0,
+  fourPlayers,
+  Object.fromEntries(fourPlayers.map((id) => [id, { bid: '1', actual: '1' }])),
+);
+const threePlayers = fourPlayers.slice(0, 3);
+for (
+  let roundIndex = 1;
+  roundIndex < changedPlayerCountGame.length;
+  roundIndex++
+) {
+  changedPlayerCountGame = commitRound(
+    changedPlayerCountGame,
+    roundIndex,
+    threePlayers,
+    Object.fromEntries(
+      threePlayers.map((id) => [id, { bid: '20', actual: '1' }]),
+    ),
+  );
+}
+assert.equal(actualWinsTotal(changedPlayerCountGame, threePlayers), 15n);
+assert.ok(changedPlayerCountGame.every((round) => round.saved));
+
 console.log(
-  'Passed: per-player actual-win limit, distributed total exactly 13, uncapped bids, precision-safe scoring, five-round validation, cumulative totals, and empty reset state.',
+  'Passed: four-player-only total of 13, preserved per-player actual-win limit, uncapped bids, other player counts, precision-safe scoring, five-round validation, cumulative totals, and empty reset state.',
 );
