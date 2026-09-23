@@ -1,212 +1,162 @@
 import assert from 'node:assert/strict';
 import {
-  TOTAL_ACTUAL_WINS,
+  ALLOWED_ROUND_COUNTS,
+  DEFAULT_ROUND_COUNT,
   MAX_ACTUAL_WINS,
+  ROUND_TARGET,
   score,
   validActual,
   validBid,
+  validRoundCount,
   newGame,
   commitRound,
   cumulative,
   actualWinsTotal,
+  roundActualTotal,
+  roundComplete,
 } from '../app/scoring.ts';
 
 for (const [bid, actual, expected] of [
   [1, 4, 5n],
-  [2, 5, 7n],
   [4, 1, -3n],
-  [5, 2, -3n],
   [2, 2, 4n],
-  [3, 2, -1n],
   [0, 0, 0n],
 ]) {
   assert.equal(score({ bid: String(bid), actual: String(actual) }), expected);
 }
 
-assert.equal(TOTAL_ACTUAL_WINS, 13);
+assert.deepEqual(ALLOWED_ROUND_COUNTS, [3, 4, 5, 6, 7]);
+assert.equal(DEFAULT_ROUND_COUNT, 5);
+assert.equal(ROUND_TARGET, 13);
+for (const count of ALLOWED_ROUND_COUNTS) {
+  assert.equal(validRoundCount(count), true);
+  assert.equal(newGame(count).length, count);
+}
+assert.throws(() => newGame(2));
+assert.throws(() => newGame(8));
+
 assert.equal(MAX_ACTUAL_WINS, 13);
+assert.equal(validActual('0'), true);
 assert.equal(validActual('13'), true);
 assert.equal(validActual('14'), false);
-assert.equal(validActual('999'), false);
-assert.equal(score({ bid: '1', actual: '13' }), 14n);
-assert.equal(score({ bid: '1', actual: '14' }), 0n);
 
-assert.equal(validBid('13'), true);
-assert.equal(validBid('14'), true);
-assert.equal(validBid('1000'), true);
+// Individual and combined bids remain uncapped and independent from 13.
 const unlimitedBid = '1000000000000000000000000000000';
+for (const bid of ['1', '13', '89', '98', '9087', '10000']) {
+  assert.equal(validBid(bid), true);
+}
 assert.equal(validBid(unlimitedBid), true);
 assert.equal(
   score({ bid: unlimitedBid, actual: '13' }),
   13n - BigInt(unlimitedBid),
 );
 
-for (const value of ['', '-1', 'NaN', 'Infinity', '1.5']) {
-  assert.equal(score({ bid: value, actual: '4' }), 0n);
-}
-
-let game = newGame();
-const players = ['a', 'b'];
-assert.equal(game.length, 5);
-assert.equal(actualWinsTotal(game, players), 0n);
-assert.equal(cumulative(game, 'a'), 0n);
-assert.throws(() =>
-  commitRound(game, 1, players, {
-    a: { bid: '1', actual: '4' },
-    b: { bid: '1', actual: '4' },
-  }),
-);
-assert.throws(() =>
-  commitRound(game, 0, players, {
-    a: { bid: '', actual: '4' },
-    b: { bid: '1', actual: '1' },
-  }),
-);
-assert.throws(() =>
-  commitRound(game, 0, ['a', 'a'], {
-    a: { bid: '1', actual: '1' },
-  }),
-);
-
-const rounds = [
-  [3, 2],
-  [1, 2],
-  [0, 1],
-  [2, 1],
-  [1, 0],
-];
-for (let i = 0; i < rounds.length; i++) {
-  const [a, b] = rounds[i];
-  game = commitRound(game, i, players, {
-    a: { bid: '1', actual: String(a) },
-    b: { bid: '1', actual: String(b) },
-  });
-}
-assert.equal(actualWinsTotal(game, players), 13n);
-assert.equal(cumulative(game, 'a'), 10n);
-assert.equal(cumulative(game, 'b'), 9n);
-assert.ok(game.every((round) => round.saved));
-assert.throws(() =>
-  commitRound(game, 5, players, {
-    a: { bid: '1', actual: '1' },
-    b: { bid: '1', actual: '0' },
-  }),
-);
-
-const incomplete = newGame();
-let partial = incomplete;
-for (let i = 0; i < 4; i++) {
-  partial = commitRound(partial, i, players, {
-    a: { bid: '1', actual: '1' },
-    b: { bid: '1', actual: '1' },
-  });
-}
-assert.equal(actualWinsTotal(partial, players), 8n);
-partial = commitRound(partial, 4, players, {
-  a: { bid: '1', actual: '0' },
-  b: { bid: '1', actual: '1' },
-});
-assert.equal(actualWinsTotal(partial, players), 9n);
-assert.ok(partial.every((round) => round.saved));
-
-// A complete four-player game accepts a natural 3 + 4 + 2 + 4 distribution.
-const fourPlayers = ['kush', 'aman', 'rohit', 'sarthak'];
-let fourPlayerGame = newGame();
-for (let i = 0; i < 4; i++) {
-  fourPlayerGame = commitRound(
-    fourPlayerGame,
-    i,
-    fourPlayers,
-    Object.fromEntries(
-      fourPlayers.map((id) => [id, { bid: '0', actual: '0' }]),
-    ),
+const players = ['a', 'b', 'c', 'd'];
+const entries = (bids, actuals) =>
+  Object.fromEntries(
+    players.map((id, index) => [
+      id,
+      { bid: String(bids[index]), actual: String(actuals[index]) },
+    ]),
   );
-}
-fourPlayerGame = commitRound(fourPlayerGame, 4, fourPlayers, {
-  kush: { bid: '3', actual: '3' },
-  aman: { bid: '4', actual: '4' },
-  rohit: { bid: '2', actual: '2' },
-  sarthak: { bid: '1', actual: '4' },
-});
-assert.equal(actualWinsTotal(fourPlayerGame, fourPlayers), 13n);
 
-const finishWithDistribution = (actuals) => {
-  let candidate = newGame();
-  for (let i = 0; i < 4; i++) {
-    candidate = commitRound(
-      candidate,
-      i,
-      fourPlayers,
-      Object.fromEntries(
-        fourPlayers.map((id) => [id, { bid: '0', actual: '0' }]),
-      ),
-    );
-  }
-  return () =>
-    commitRound(
-      candidate,
-      4,
-      fourPlayers,
-      Object.fromEntries(
-        fourPlayers.map((id, i) => [
-          id,
-          { bid: '0', actual: String(actuals[i]) },
-        ]),
-      ),
-    );
-};
-assert.throws(finishWithDistribution([3, 4, 2, 3])); // total 12
-assert.throws(finishWithDistribution([4, 4, 3, 4])); // total 15
+const unlimitedBidEntries = entries([89, 98, 9087, 76], [5, 4, 1, 3]);
+const total5 = entries([89, 98, 9087, 76], [2, 1, 1, 1]);
+const total12 = entries([89, 98, 9087, 76], [5, 4, 1, 2]);
+const total19 = entries([89, 98, 9087, 76], [8, 6, 4, 1]);
+assert.equal(roundActualTotal(total5, players), 5n);
+assert.equal(roundActualTotal(total12, players), 12n);
+assert.equal(roundActualTotal(unlimitedBidEntries, players), 13n);
+assert.equal(roundComplete(total5, players), false);
+assert.equal(roundComplete(total12, players), false);
+assert.equal(roundComplete(total19, players), false);
+assert.equal(roundComplete(unlimitedBidEntries, players), true);
 
-// Player counts other than four keep their existing behavior and do not inherit
-// the four-player combined-total rule.
-for (const playerIds of [
-  ['a', 'b', 'c'],
-  ['a', 'b', 'c', 'd', 'e'],
-]) {
-  let otherGame = newGame();
-  for (let roundIndex = 0; roundIndex < otherGame.length; roundIndex++) {
-    otherGame = commitRound(
-      otherGame,
-      roundIndex,
-      playerIds,
-      Object.fromEntries(
-        playerIds.map((id) => [id, { bid: '20', actual: '1' }]),
-      ),
-    );
-  }
-  assert.equal(
-    actualWinsTotal(otherGame, playerIds),
-    BigInt(playerIds.length * 5),
-  );
-  assert.ok(otherGame.every((round) => round.saved));
-}
+assert.throws(
+  () => commitRound(newGame(5, players), 0, players, total5),
+  /Actual Won must total exactly 13.*5 \/ 13/,
+);
+assert.throws(
+  () => commitRound(newGame(5, players), 0, players, total12),
+  /Actual Won must total exactly 13.*12 \/ 13/,
+);
+assert.throws(
+  () => commitRound(newGame(5, players), 0, players, total19),
+  /Actual Won must total exactly 13.*19 \/ 13/,
+);
 
-let changedPlayerCountGame = newGame();
-changedPlayerCountGame = commitRound(
-  changedPlayerCountGame,
+// A single player's 13 is not the completion condition when the round total is 14.
+const singlePlayerTriggerBug = entries([89, 98, 9087, 76], [13, 1, 0, 0]);
+assert.equal(roundComplete(singlePlayerTriggerBug, players), false);
+assert.throws(
+  () => commitRound(newGame(5, players), 0, players, singlePlayerTriggerBug),
+  /Current total: 14 \/ 13/,
+);
+
+const largeBidRound = commitRound(
+  newGame(5, players),
   0,
-  fourPlayers,
-  Object.fromEntries(fourPlayers.map((id) => [id, { bid: '1', actual: '1' }])),
+  players,
+  unlimitedBidEntries,
 );
-const threePlayers = fourPlayers.slice(0, 3);
-for (
-  let roundIndex = 1;
-  roundIndex < changedPlayerCountGame.length;
-  roundIndex++
-) {
-  changedPlayerCountGame = commitRound(
-    changedPlayerCountGame,
-    roundIndex,
-    threePlayers,
-    Object.fromEntries(
-      threePlayers.map((id) => [id, { bid: '20', actual: '1' }]),
-    ),
-  );
+assert.equal(largeBidRound[0].saved, true);
+
+// Non-four-player games never inherit the combined Actual Won target.
+const threePlayers = ['a', 'b', 'c'];
+const threePlayerEntries = {
+  a: { bid: '754', actual: '8' },
+  b: { bid: '545', actual: '6' },
+  c: { bid: '85', actual: '4' },
+};
+assert.equal(roundActualTotal(threePlayerEntries, threePlayers), 18n);
+assert.equal(roundComplete(threePlayerEntries, threePlayers), true);
+const threePlayerGame = commitRound(
+  newGame(3, threePlayers),
+  0,
+  threePlayers,
+  threePlayerEntries,
+);
+assert.equal(threePlayerGame[0].saved, true);
+assert.equal(cumulative(threePlayerGame, 'a'), -746n);
+
+const fivePlayers = ['a', 'b', 'c', 'd', 'e'];
+const fivePlayerEntries = Object.fromEntries(
+  fivePlayers.map((id) => [id, { bid: '10000', actual: '13' }]),
+);
+assert.equal(roundActualTotal(fivePlayerEntries, fivePlayers), 65n);
+assert.equal(
+  commitRound(newGame(3, fivePlayers), 0, fivePlayers, fivePlayerEntries)[0]
+    .saved,
+  true,
+);
+
+// Verify dynamic games, fresh zeroed rounds, and preserved cumulative scores.
+for (const roundCount of [3, 5, 7]) {
+  let game = newGame(roundCount, players);
+  for (let index = 0; index < roundCount; index++) {
+    assert.deepEqual(
+      players.map((id) => game[index].entries[id].actual),
+      ['0', '0', '0', '0'],
+    );
+    const scoreBeforeSave = cumulative(game, 'a');
+    game = commitRound(game, index, players, unlimitedBidEntries);
+    assert.equal(cumulative(game, 'a'), scoreBeforeSave - 84n);
+    if (index + 1 < roundCount) {
+      assert.equal(roundActualTotal(game[index + 1].entries, players), 0n);
+      assert.equal(game[index + 1].saved, false);
+    }
+  }
+  assert.ok(game.every((round) => round.saved));
+  assert.equal(actualWinsTotal(game, players), BigInt(13 * roundCount));
+  assert.equal(cumulative(game, 'a'), BigInt(-84 * roundCount));
 }
-assert.equal(actualWinsTotal(changedPlayerCountGame, threePlayers), 15n);
-assert.ok(changedPlayerCountGame.every((round) => round.saved));
+
+assert.throws(() =>
+  commitRound(newGame(5, players), 0, ['a', 'a'], {
+    a: { bid: '13', actual: '13' },
+  }),
+);
 
 console.log(
-  'Passed: four-player-only total of 13, preserved per-player actual-win limit, uncapped bids, other player counts, precision-safe scoring, five-round validation, cumulative totals, and empty reset state.',
+  'Passed: four-player-only Actual target of 13, non-four-player games without the target, unlimited bids, independent zeroed rounds, preserved totals, and 3/5/7-round games.',
 );
