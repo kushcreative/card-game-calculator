@@ -633,13 +633,26 @@ small {
 .game-dialog label {
   font-size: 14px;
 }
-.game-dialog input {
+.game-dialog input,
+.game-dialog select {
   border: 1px solid #3b5443;
   background: #0b160f;
   border-radius: 7px;
   padding: 12px;
   color: white;
   width: 100%;
+}
+.game-dialog select {
+  cursor: pointer;
+  color-scheme: dark;
+}
+.settings-copy > label {
+  color: #f4f7f4;
+  font-weight: 700;
+}
+.settings-copy > small {
+  margin-top: -10px;
+  color: #809486;
 }
 .settings-copy {
   display: grid;

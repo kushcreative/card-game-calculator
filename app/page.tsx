@@ -2,15 +2,16 @@
 import { useState } from 'react';
 import { useGameTools } from './game-tools';
 import {
-  ROUND_COUNT,
-  TOTAL_ACTUAL_WINS,
+  ALLOWED_ROUND_COUNTS,
+  DEFAULT_ROUND_COUNT,
+  ROUND_TARGET,
   validBid,
   validActual,
   score,
   newGame,
   commitRound,
   cumulative,
-  actualWinsTotal,
+  roundActualTotal,
   type Entry,
   type Round,
 } from './scoring';
@@ -53,16 +54,17 @@ import {
   AlertDialogAction,
 } from '@/components/ui/alert-dialog';
 type Player = { id: string; name: string };
-const empty = (): Entry => ({ bid: '', actual: '' });
+const empty = (): Entry => ({ bid: '', actual: '0' });
 
 const signed = (n: bigint) => (n > 0n ? `+${n}` : String(n));
 const tone = (n: bigint) =>
   n > 0n ? 'positive' : n < 0n ? 'negative' : 'neutral';
 export default function Home() {
+  const [roundCount, setRoundCount] = useState(DEFAULT_ROUND_COUNT);
   const [players, setPlayers] = useState<Player[]>([]),
-    [rounds, setRounds] = useState<Round[]>(newGame),
+    [rounds, setRounds] = useState<Round[]>(() => newGame(roundCount)),
     [index, setIndex] = useState(0),
-    [saved, setSaved] = useState<Round[]>(newGame),
+    [saved, setSaved] = useState<Round[]>(() => newGame(roundCount)),
     [final, setFinal] = useState(false);
   const [modal, setModal] = useState<'add' | 'settings' | null>(null),
     [name, setName] = useState(''),
@@ -74,15 +76,12 @@ export default function Home() {
   const round = rounds[index];
   const total = (id: string) => cumulative(saved, id);
   const completed = saved.filter((r) => r.saved).length;
-  const finished = completed === ROUND_COUNT;
-  const actualTotal = actualWinsTotal(
-    saved,
-    players.map((p) => p.id),
-  );
-  const usesFourPlayerRules = players.length === 4;
+  const finished = completed === roundCount;
+  const playerIds = players.map((player) => player.id);
+  const currentActual = roundActualTotal(round.entries, playerIds);
   const firstOpen = saved.findIndex((r) => !r.saved);
   const canVisit = (i: number) =>
-    i >= 0 && i < ROUND_COUNT && (firstOpen === -1 || i <= firstOpen);
+    i >= 0 && i < roundCount && (firstOpen === -1 || i <= firstOpen);
   function navigate(i: number) {
     if (canVisit(i)) {
       setIndex(i);
@@ -100,13 +99,29 @@ export default function Home() {
     );
     setSaved(next);
     setRounds((rs) => rs.map((r, i) => (i === index ? next[i] : r)));
-    setNotice(`Round ${index + 1} saved`);
+    const gameComplete = next.every((savedRound) => savedRound.saved);
+    setNotice(
+      gameComplete
+        ? `Round ${index + 1} saved. Game complete.`
+        : `Round ${index + 1} saved. Round ${index + 2} is ready.`,
+    );
     setError('');
-    if (next.every((r) => r.saved)) {
+    if (gameComplete) {
       setFinal(true);
     } else {
       setIndex(index + 1);
     }
+  }
+  function chooseRoundCount(nextCount: number) {
+    if (nextCount === roundCount) return;
+    const playerIds = players.map((player) => player.id);
+    setRoundCount(nextCount);
+    setRounds(newGame(nextCount, playerIds));
+    setSaved(newGame(nextCount, playerIds));
+    setIndex(0);
+    setFinal(false);
+    setNotice(`New ${nextCount}-round game ready`);
+    setError('');
   }
   const ranked = [...players].sort((a, b) => {
     const difference = total(b.id) - total(a.id);
@@ -204,7 +219,19 @@ export default function Home() {
       setError('This player is already at the table.');
       return;
     }
-    setPlayers((ps) => [...ps, { id: crypto.randomUUID(), name: clean }]);
+    const player = { id: crypto.randomUUID(), name: clean };
+    setPlayers((ps) => [...ps, player]);
+    const addEntry = (gameRounds: Round[]) =>
+      gameRounds.map((gameRound) =>
+        gameRound.saved
+          ? gameRound
+          : {
+              ...gameRound,
+              entries: { ...gameRound.entries, [player.id]: empty() },
+            },
+      );
+    setRounds(addEntry);
+    setSaved(addEntry);
     setModal(null);
     setName('');
     setError('');
@@ -219,8 +246,8 @@ export default function Home() {
           <div>
             <h1>Card Game Calculator</h1>
             <p>
-              5 Rounds <span>•</span> Track Scores <span>•</span> Find the
-              Winner
+              {roundCount} Rounds <span>•</span> Track Scores <span>•</span>{' '}
+              Find the Winner
             </p>
           </div>
         </div>
@@ -309,7 +336,7 @@ export default function Home() {
       </section>
       {final && finished ? (
         <section className="panel final-result">
-          <span className="eyebrow">FIVE ROUNDS. ONE GREAT GAME.</span>
+          <span className="eyebrow">{roundCount} ROUNDS. ONE GREAT GAME.</span>
           <div className="trophy-halo">
             <Trophy size={58} strokeWidth={1.2} />
           </div>
@@ -321,7 +348,7 @@ export default function Home() {
           </div>
           <div className="final-stats">
             <span>
-              Total Rounds: <b>5</b>
+              Total Rounds: <b>{roundCount}</b>
             </span>
             <span>
               Winner Margin:{' '}
@@ -354,7 +381,7 @@ export default function Home() {
             <button
               onClick={() => {
                 setFinal(false);
-                setIndex(4);
+                setIndex(roundCount - 1);
               }}
             >
               Review Rounds
@@ -369,7 +396,7 @@ export default function Home() {
                 <Spade size={18} />
               </span>
               <h2>
-                Round {index + 1} <span className="count">/ 5</span>
+                Round {index + 1} <span className="count">/ {roundCount}</span>
               </h2>
               <span className="badge">
                 {round.saved ? 'Saved' : 'In progress'}
@@ -385,7 +412,9 @@ export default function Home() {
                 >
                   <ChevronLeft />
                 </button>
-                <span>{index + 1} / 5</span>
+                <span>
+                  {index + 1} / {roundCount}
+                </span>
                 <button
                   className="icon"
                   aria-label="Next round"
@@ -395,15 +424,6 @@ export default function Home() {
                   <ChevronRight />
                 </button>
               </div>
-              <button
-                disabled={!finished && !canVisit(index + 1)}
-                onClick={() =>
-                  finished ? setFinal(true) : navigate(index + 1)
-                }
-              >
-                <ChevronRight size={16} />
-                {finished ? 'Final Result' : 'Continue Round'}
-              </button>
             </div>
           </div>
           <nav className="round-steps" aria-label="Game rounds">
@@ -459,8 +479,18 @@ export default function Home() {
                             key === 'actual' ? 'actual wins' : 'bid'
                           }`}
                           placeholder="0"
-                          value={round.entries[p.id]?.[key] ?? ''}
+                          value={
+                            round.entries[p.id]?.[key] ??
+                            (key === 'actual' ? '0' : '')
+                          }
                           onChange={(e) => edit(p.id, key, e.target.value)}
+                          onFocus={(e) => {
+                            if (
+                              key === 'actual' &&
+                              e.currentTarget.value === '0'
+                            )
+                              e.currentTarget.select();
+                          }}
                         />
                       </div>
                     </TableCell>
@@ -495,7 +525,14 @@ export default function Home() {
                 onClick={() => {
                   setRounds((rs) =>
                     rs.map((r, i) =>
-                      i === index ? { entries: {}, saved: false } : r,
+                      i === index
+                        ? {
+                            entries: Object.fromEntries(
+                              players.map((player) => [player.id, empty()]),
+                            ),
+                            saved: false,
+                          }
+                        : r,
                     ),
                   );
                   setNotice('');
@@ -514,14 +551,17 @@ export default function Home() {
               <span>
                 Actual &lt; Bid: <b className="negative">Actual − Bid</b>
               </span>
-              <span className="rule-divider" />
-              <span>
-                Actual wins:{' '}
-                <b>
-                  {actualTotal.toString()}
-                  {usesFourPlayerRules ? ` / ${TOTAL_ACTUAL_WINS}` : ''}
-                </b>
-              </span>
+              {players.length === 4 && (
+                <>
+                  <span className="rule-divider" />
+                  <span>
+                    Actual:{' '}
+                    <b>
+                      {currentActual.toString()} / {ROUND_TARGET}
+                    </b>
+                  </span>
+                </>
+              )}
             </div>
           </div>
           {(notice || error) && (
@@ -716,6 +756,25 @@ export default function Home() {
             </form>
           ) : (
             <div className="settings-copy">
+              <label htmlFor="round-count">Rounds in this game</label>
+              <select
+                id="round-count"
+                value={roundCount}
+                onChange={(event) =>
+                  chooseRoundCount(Number(event.target.value))
+                }
+              >
+                {ALLOWED_ROUND_COUNTS.map((count) => (
+                  <option key={count} value={count}>
+                    {count} rounds
+                    {count === DEFAULT_ROUND_COUNT ? ' (default)' : ''}
+                  </option>
+                ))}
+              </select>
+              <small>
+                Changing the round count starts a fresh scorecard and keeps the
+                players at the table.
+              </small>
               <p>
                 When Actual Won is greater than or equal to Bid, score Bid +
                 Actual Won. When Actual Won is lower, score Actual Won − Bid.
@@ -723,15 +782,17 @@ export default function Home() {
               <p>
                 An exact match uses the addition rule: a bid of 2 and actual of
                 2 earns +4. Bids are non-negative whole numbers with no game
-                cap. In a four-player game, the combined actual wins across all
-                players and rounds must total exactly 13 when the game is
-                complete.
+                cap. Bid values are never compared with the round target.
               </p>
               <p>
-                Totals and standings include saved rounds only. Saving
-                automatically advances through exactly 5 rounds. This game lasts
+                Totals and standings include saved rounds only. Saving a valid
+                round automatically advances through the selected {roundCount}{' '}
+                rounds. Every new round starts at 0 Actual Won. This game lasts
                 for this open session.
               </p>
+              {players.length === 4 && (
+                <p>Round completes when total Actual Won reaches 13.</p>
+              )}
               <button onClick={() => setModal(null)}>Got it</button>
             </div>
           )}
@@ -752,7 +813,7 @@ export default function Home() {
           </AlertDialogTitle>
           <AlertDialogDescription>
             {reset
-              ? 'This clears all 5 rounds and scores, removes all player names, and returns to Round 1.'
+              ? `This clears all ${roundCount} rounds and scores, removes all player names, restores the default ${DEFAULT_ROUND_COUNT}-round game, and returns to Round 1.`
               : 'Their scores will be removed from all rounds and the standings.'}
           </AlertDialogDescription>
           <div className="actions">
@@ -762,8 +823,9 @@ export default function Home() {
                 if (reset) {
                   setPlayers([]);
                   setName('');
-                  setRounds(newGame());
-                  setSaved(newGame());
+                  setRoundCount(DEFAULT_ROUND_COUNT);
+                  setRounds(newGame(DEFAULT_ROUND_COUNT));
+                  setSaved(newGame(DEFAULT_ROUND_COUNT));
                   setIndex(0);
                   setFinal(false);
                 } else {

@@ -1,9 +1,11 @@
-export const ROUND_COUNT = 5;
-// Preserve the game's per-player limit while enforcing the separate table-wide total below.
+export const ALLOWED_ROUND_COUNTS = [3, 4, 5, 6, 7] as const;
+export const DEFAULT_ROUND_COUNT = 5;
 export const MAX_ACTUAL_WINS = 13;
-export const TOTAL_ACTUAL_WINS = 13;
+export const ROUND_TARGET = 13;
 export type Entry = { bid: string; actual: string };
 export type Round = { entries: Record<string, Entry>; saved: boolean };
+export const validRoundCount = (value: number) =>
+  ALLOWED_ROUND_COUNTS.includes(value as (typeof ALLOWED_ROUND_COUNTS)[number]);
 export const validBid = (value: string) => /^\d+$/.test(value);
 export const validActual = (value: string) =>
   /^\d+$/.test(value) && BigInt(value) <= BigInt(MAX_ACTUAL_WINS);
@@ -14,15 +16,46 @@ export function score(entry?: Entry) {
     actual = BigInt(entry.actual);
   return actual >= bid ? bid + actual : actual - bid;
 }
-export const blankRound = (): Round => ({ entries: {}, saved: false });
-export const newGame = () => Array.from({ length: ROUND_COUNT }, blankRound);
+export const blankEntry = (): Entry => ({ bid: '', actual: '0' });
+export const blankRound = (playerIds: string[] = []): Round => ({
+  entries: Object.fromEntries(playerIds.map((id) => [id, blankEntry()])),
+  saved: false,
+});
+export const newGame = (
+  roundCount = DEFAULT_ROUND_COUNT,
+  playerIds: string[] = [],
+) => {
+  if (!validRoundCount(roundCount))
+    throw new Error('Choose 3, 4, 5, 6, or 7 rounds.');
+  return Array.from({ length: roundCount }, () => blankRound(playerIds));
+};
+export const roundActualTotal = (
+  entries: Record<string, Entry>,
+  playerIds: string[],
+) =>
+  playerIds.reduce(
+    (total, id) =>
+      total +
+      (validActual(entries[id]?.actual ?? '')
+        ? BigInt(entries[id].actual)
+        : 0n),
+    0n,
+  );
+export const roundComplete = (
+  entries: Record<string, Entry>,
+  playerIds: string[],
+) =>
+  playerIds.length !== 4 ||
+  roundActualTotal(entries, playerIds) === BigInt(ROUND_TARGET);
 export function commitRound(
   rounds: Round[],
   index: number,
   playerIds: string[],
   entries: Record<string, Entry>,
 ) {
-  if (!Number.isInteger(index) || index < 0 || index >= ROUND_COUNT)
+  if (!validRoundCount(rounds.length))
+    throw new Error('The game must contain 3 to 7 rounds.');
+  if (!Number.isInteger(index) || index < 0 || index >= rounds.length)
     throw new Error('Invalid round.');
   if (
     !playerIds.length ||
@@ -39,24 +72,13 @@ export function commitRound(
     );
   if (rounds.slice(0, index).some((r) => !r.saved))
     throw new Error('Save the earlier rounds first.');
-  const nextRounds = rounds.map((r, i) =>
+  if (playerIds.length === 4 && !roundComplete(entries, playerIds))
+    throw new Error(
+      `Actual Won must total exactly ${ROUND_TARGET} for this round. Current total: ${roundActualTotal(entries, playerIds)} / ${ROUND_TARGET}.`,
+    );
+  return rounds.map((r, i) =>
     i === index ? { entries: structuredClone(entries), saved: true } : r,
   );
-  const usesFourPlayerRules = playerIds.length === 4;
-  const actualTotal = actualWinsTotal(nextRounds, playerIds);
-  if (usesFourPlayerRules && actualTotal > BigInt(TOTAL_ACTUAL_WINS))
-    throw new Error(
-      `Actual wins across the game cannot exceed ${TOTAL_ACTUAL_WINS}. Distribute the remaining wins among the players.`,
-    );
-  if (
-    usesFourPlayerRules &&
-    nextRounds.every((round) => round.saved) &&
-    actualTotal !== BigInt(TOTAL_ACTUAL_WINS)
-  )
-    throw new Error(
-      `The game is complete only when all players' actual wins total exactly ${TOTAL_ACTUAL_WINS}.`,
-    );
-  return nextRounds;
 }
 export const actualWinsTotal = (rounds: Round[], playerIds: string[]) =>
   rounds.reduce(

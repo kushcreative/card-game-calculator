@@ -59,7 +59,7 @@ export function useGameTools(
                       { type: 'string', pattern: '^[0-9]+$' },
                     ],
                     description:
-                      'A non-negative whole-number bid. Use a string for values outside the safe JSON integer range.',
+                      'An unlimited non-negative whole-number bid. Use a string for values outside the safe JSON integer range.',
                   },
                   actual: {
                     oneOf: [
@@ -67,7 +67,7 @@ export function useGameTools(
                       { type: 'string', pattern: '^[0-9]+$' },
                     ],
                     description:
-                      'A non-negative whole-number actual-win count from 0 through 13 per player. Four-player games also validate the combined total across all players and rounds.',
+                      "A non-negative whole-number actual-win count from 0 through 13 for the current round. In exactly four-player games, all players' Actual Won values must total exactly 13.",
                   },
                 },
                 required: ['playerId', 'bid', 'actual'],
