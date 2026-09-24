@@ -1,7 +1,9 @@
 export const ALLOWED_ROUND_COUNTS = [3, 4, 5, 6, 7] as const;
 export const DEFAULT_ROUND_COUNT = 5;
+export const DEFAULT_SCORING_MODE = 'easy' as const;
 export const MAX_ACTUAL_WINS = 13;
 export const ROUND_TARGET = 13;
+export type ScoringMode = 'easy' | 'hard';
 export type Entry = { bid: string; actual: string };
 export type Round = { entries: Record<string, Entry>; saved: boolean };
 export const validRoundCount = (value: number) =>
@@ -15,6 +17,24 @@ export function score(entry?: Entry) {
   const bid = BigInt(entry.bid),
     actual = BigInt(entry.actual);
   return actual >= bid ? bid + actual : actual - bid;
+}
+
+// Hard-mode scores are stored in tenths so decimal results stay exact even
+// when bids are larger than JavaScript's safe integer range.
+export function hardScoreInTenths(entry?: Entry) {
+  if (!entry || !validBid(entry.bid) || !validActual(entry.actual)) return 0n;
+  const bid = BigInt(entry.bid),
+    actual = BigInt(entry.actual);
+  if (actual === bid) return bid * 10n;
+  if (actual < bid) return -bid * 10n;
+  return bid * 10n + (actual - bid);
+}
+
+export function scoreInTenths(
+  entry?: Entry,
+  mode: ScoringMode = DEFAULT_SCORING_MODE,
+) {
+  return mode === 'hard' ? hardScoreInTenths(entry) : score(entry) * 10n;
 }
 export const blankEntry = (): Entry => ({ bid: '', actual: '0' });
 export const blankRound = (playerIds: string[] = []): Round => ({
@@ -41,6 +61,21 @@ export const roundActualTotal = (
         : 0n),
     0n,
   );
+export function actualEditAllowed(
+  entries: Record<string, Entry>,
+  playerIds: string[],
+  playerId: string,
+  value: string,
+) {
+  if (value !== '' && !validActual(value)) return false;
+  if (playerIds.length !== 4) return true;
+  return (
+    playerIds.reduce((total, id) => {
+      const actual = id === playerId ? value : (entries[id]?.actual ?? '');
+      return total + (validActual(actual) ? BigInt(actual) : 0n);
+    }, 0n) <= BigInt(ROUND_TARGET)
+  );
+}
 export const roundComplete = (
   entries: Record<string, Entry>,
   playerIds: string[],
@@ -99,5 +134,15 @@ export const actualWinsTotal = (rounds: Round[], playerIds: string[]) =>
 export const cumulative = (rounds: Round[], id: string) =>
   rounds.reduce(
     (total, round) => total + (round.saved ? score(round.entries[id]) : 0n),
+    0n,
+  );
+export const cumulativeInTenths = (
+  rounds: Round[],
+  id: string,
+  mode: ScoringMode = DEFAULT_SCORING_MODE,
+) =>
+  rounds.reduce(
+    (total, round) =>
+      total + (round.saved ? scoreInTenths(round.entries[id], mode) : 0n),
     0n,
   );

@@ -4,16 +4,19 @@ import { useGameTools } from './game-tools';
 import {
   ALLOWED_ROUND_COUNTS,
   DEFAULT_ROUND_COUNT,
+  DEFAULT_SCORING_MODE,
   ROUND_TARGET,
   validBid,
   validActual,
-  score,
+  scoreInTenths,
   newGame,
   commitRound,
-  cumulative,
+  cumulativeInTenths,
   roundActualTotal,
+  actualEditAllowed,
   type Entry,
   type Round,
+  type ScoringMode,
 } from './scoring';
 import {
   Spade,
@@ -56,11 +59,21 @@ import {
 type Player = { id: string; name: string };
 const empty = (): Entry => ({ bid: '', actual: '0' });
 
-const signed = (n: bigint) => (n > 0n ? `+${n}` : String(n));
+const displayScore = (tenths: bigint) => {
+  const negative = tenths < 0n;
+  const absolute = negative ? -tenths : tenths;
+  const whole = absolute / 10n;
+  const decimal = absolute % 10n;
+  return `${negative ? '-' : ''}${whole}${decimal ? `.${decimal}` : ''}`;
+};
+const signed = (n: bigint) =>
+  n > 0n ? `+${displayScore(n)}` : displayScore(n);
 const tone = (n: bigint) =>
   n > 0n ? 'positive' : n < 0n ? 'negative' : 'neutral';
 export default function Home() {
   const [roundCount, setRoundCount] = useState(DEFAULT_ROUND_COUNT);
+  const [scoringMode, setScoringMode] =
+    useState<ScoringMode>(DEFAULT_SCORING_MODE);
   const [players, setPlayers] = useState<Player[]>([]),
     [rounds, setRounds] = useState<Round[]>(() => newGame(roundCount)),
     [index, setIndex] = useState(0),
@@ -74,7 +87,7 @@ export default function Home() {
     [notice, setNotice] = useState(''),
     [error, setError] = useState('');
   const round = rounds[index];
-  const total = (id: string) => cumulative(saved, id);
+  const total = (id: string) => cumulativeInTenths(saved, id, scoringMode);
   const completed = saved.filter((r) => r.saved).length;
   const finished = completed === roundCount;
   const playerIds = players.map((player) => player.id);
@@ -132,10 +145,11 @@ export default function Home() {
     () => ({
       players,
       rounds,
+      scoringMode,
       currentRound: index + 1,
       totals: players.map((p) => ({
         ...p,
-        total: total(p.id).toString(),
+        total: displayScore(total(p.id)),
       })),
     }),
     (input) => {
@@ -182,6 +196,15 @@ export default function Home() {
   function edit(id: string, key: keyof Entry, value: string) {
     const isValid = key === 'bid' ? validBid(value) : validActual(value);
     if (value !== '' && !isValid) return;
+    if (
+      key === 'actual' &&
+      !actualEditAllowed(round.entries, playerIds, id, value)
+    ) {
+      setError(
+        `Actual Won cannot make the four-player total exceed ${ROUND_TARGET}.`,
+      );
+      return;
+    }
     setRounds((rs) =>
       rs.map((r, i) =>
         i === index
@@ -344,7 +367,8 @@ export default function Home() {
           <h2>{leaders.length > 1 ? 'WINNERS' : 'WINNER'}</h2>
           <h3>{leaders.map((p) => p.name).join(' & ')}</h3>
           <div className="final-points">
-            Final Score: {leaders.length ? total(leaders[0].id) : 0} points
+            Final Score:{' '}
+            {leaders.length ? displayScore(total(leaders[0].id)) : '0'} points
           </div>
           <div className="final-stats">
             <span>
@@ -354,8 +378,8 @@ export default function Home() {
               Winner Margin:{' '}
               <b>
                 {ranked.length > 1
-                  ? total(ranked[0].id) - total(ranked[1].id)
-                  : 0}{' '}
+                  ? displayScore(total(ranked[0].id) - total(ranked[1].id))
+                  : '0'}{' '}
                 points
               </b>
             </span>
@@ -368,7 +392,7 @@ export default function Home() {
                 </span>
                 <strong>{p.name}</strong>
                 <b className={tone(total(p.id))}>
-                  {total(p.id)} <small>pts</small>
+                  {displayScore(total(p.id))} <small>pts</small>
                 </b>
               </div>
             ))}
@@ -497,13 +521,15 @@ export default function Home() {
                   ))}
                   <TableCell>
                     <span
-                      className={`score ${tone(score(round.entries[p.id]))}`}
+                      className={`score ${tone(scoreInTenths(round.entries[p.id], scoringMode))}`}
                     >
-                      {signed(score(round.entries[p.id]))}
+                      {signed(scoreInTenths(round.entries[p.id], scoringMode))}
                     </span>
                   </TableCell>
                   <TableCell>
-                    <strong className={tone(total(p.id))}>{total(p.id)}</strong>
+                    <strong className={tone(total(p.id))}>
+                      {displayScore(total(p.id))}
+                    </strong>
                   </TableCell>
                 </TableRow>
               ))}
@@ -544,13 +570,29 @@ export default function Home() {
             </div>
             <div className="rules">
               <Info size={15} />
-              <span>
-                Actual ≥ Bid: <b className="positive">Bid + Actual</b>
-              </span>
-              <span className="rule-divider" />
-              <span>
-                Actual &lt; Bid: <b className="negative">Actual − Bid</b>
-              </span>
+              {scoringMode === 'easy' ? (
+                <>
+                  <span>
+                    Actual ≥ Bid: <b className="positive">Bid + Actual</b>
+                  </span>
+                  <span className="rule-divider" />
+                  <span>
+                    Actual &lt; Bid: <b className="negative">Actual − Bid</b>
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span>
+                    Exact: <b className="positive">Bid</b>
+                  </span>
+                  <span className="rule-divider" />
+                  <span>
+                    Miss: <b className="negative">−Bid</b>
+                  </span>
+                  <span className="rule-divider" />
+                  <span>Overtrick: +0.1 each</span>
+                </>
+              )}
               {players.length === 4 && (
                 <>
                   <span className="rule-divider" />
@@ -605,7 +647,7 @@ export default function Home() {
                 <strong>{p.name}</strong>
                 {i === 0 && <span className="leader-label">LEADING</span>}
                 <span className={`rank-score ${tone(total(p.id))}`}>
-                  {total(p.id)} <small>pts</small>
+                  {displayScore(total(p.id))} <small>pts</small>
                 </span>
               </div>
             ))}
@@ -630,7 +672,7 @@ export default function Home() {
           </h2>
           <span className="winner-points">
             {leaders.length
-              ? `${total(leaders[0].id)} points`
+              ? `${displayScore(total(leaders[0].id))} points`
               : 'Add your players'}
           </span>
           <div className="winner-bottom">
@@ -691,8 +733,16 @@ export default function Home() {
                         <>
                           {r.entries[p.id].bid} <span className="slash">/</span>{' '}
                           {r.entries[p.id].actual}{' '}
-                          <span className={tone(score(r.entries[p.id]))}>
-                            ({signed(score(r.entries[p.id]))})
+                          <span
+                            className={tone(
+                              scoreInTenths(r.entries[p.id], scoringMode),
+                            )}
+                          >
+                            (
+                            {signed(
+                              scoreInTenths(r.entries[p.id], scoringMode),
+                            )}
+                            )
                           </span>
                         </>
                       ) : (
@@ -775,14 +825,42 @@ export default function Home() {
                 Changing the round count starts a fresh scorecard and keeps the
                 players at the table.
               </small>
+              <label htmlFor="scoring-mode">Scoring Mode</label>
+              <select
+                id="scoring-mode"
+                value={scoringMode}
+                onChange={(event) =>
+                  setScoringMode(event.target.value as ScoringMode)
+                }
+              >
+                <option value="easy">Easy (default)</option>
+                <option value="hard">Hard</option>
+              </select>
+              <small>
+                Switching modes recalculates scores without changing players,
+                bids, Actual Won values, rounds, or saved game data.
+              </small>
+              {scoringMode === 'easy' ? (
+                <>
+                  <p>
+                    When Actual Won is greater than or equal to Bid, score Bid +
+                    Actual Won. When Actual Won is lower, score Actual Won −
+                    Bid.
+                  </p>
+                  <p>
+                    An exact match uses the addition rule: a bid of 2 and actual
+                    of 2 earns +4.
+                  </p>
+                </>
+              ) : (
+                <p>
+                  Exact match scores the Bid. Falling short scores −Bid. Wins
+                  above Bid score the Bid plus 0.1 for each extra win.
+                </p>
+              )}
               <p>
-                When Actual Won is greater than or equal to Bid, score Bid +
-                Actual Won. When Actual Won is lower, score Actual Won − Bid.
-              </p>
-              <p>
-                An exact match uses the addition rule: a bid of 2 and actual of
-                2 earns +4. Bids are non-negative whole numbers with no game
-                cap. Bid values are never compared with the round target.
+                Bids are non-negative whole numbers with no game cap. Bid values
+                are never compared with the round target.
               </p>
               <p>
                 Totals and standings include saved rounds only. Saving a valid
@@ -824,6 +902,7 @@ export default function Home() {
                   setPlayers([]);
                   setName('');
                   setRoundCount(DEFAULT_ROUND_COUNT);
+                  setScoringMode(DEFAULT_SCORING_MODE);
                   setRounds(newGame(DEFAULT_ROUND_COUNT));
                   setSaved(newGame(DEFAULT_ROUND_COUNT));
                   setIndex(0);
