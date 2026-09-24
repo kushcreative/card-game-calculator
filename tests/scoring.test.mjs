@@ -2,18 +2,23 @@ import assert from 'node:assert/strict';
 import {
   ALLOWED_ROUND_COUNTS,
   DEFAULT_ROUND_COUNT,
+  DEFAULT_SCORING_MODE,
   MAX_ACTUAL_WINS,
   ROUND_TARGET,
   score,
+  hardScoreInTenths,
+  scoreInTenths,
   validActual,
   validBid,
   validRoundCount,
   newGame,
   commitRound,
   cumulative,
+  cumulativeInTenths,
   actualWinsTotal,
   roundActualTotal,
   roundComplete,
+  actualEditAllowed,
 } from '../app/scoring.ts';
 
 for (const [bid, actual, expected] of [
@@ -27,6 +32,7 @@ for (const [bid, actual, expected] of [
 
 assert.deepEqual(ALLOWED_ROUND_COUNTS, [3, 4, 5, 6, 7]);
 assert.equal(DEFAULT_ROUND_COUNT, 5);
+assert.equal(DEFAULT_SCORING_MODE, 'easy');
 assert.equal(ROUND_TARGET, 13);
 for (const count of ALLOWED_ROUND_COUNTS) {
   assert.equal(validRoundCount(count), true);
@@ -51,6 +57,30 @@ assert.equal(
   13n - BigInt(unlimitedBid),
 );
 
+// Easy mode continues to use the existing score() formula unchanged.
+assert.equal(scoreInTenths({ bid: '1', actual: '4' }, 'easy'), 50n);
+assert.equal(scoreInTenths({ bid: '4', actual: '1' }, 'easy'), -30n);
+
+// Hard mode uses exact tenths and omits unnecessary decimal zeroes in the UI.
+for (const [bid, actual, expectedTenths] of [
+  ['5', '5', 50n],
+  ['5', '4', -50n],
+  ['3', '2', -30n],
+  ['5', '6', 51n],
+  ['5', '7', 52n],
+  ['5', '8', 53n],
+  ['3', '4', 31n],
+  ['3', '5', 32n],
+  ['3', '6', 33n],
+]) {
+  assert.equal(hardScoreInTenths({ bid, actual }), expectedTenths);
+  assert.equal(scoreInTenths({ bid, actual }, 'hard'), expectedTenths);
+}
+assert.equal(
+  hardScoreInTenths({ bid: unlimitedBid, actual: '13' }),
+  -BigInt(unlimitedBid) * 10n,
+);
+
 const players = ['a', 'b', 'c', 'd'];
 const entries = (bids, actuals) =>
   Object.fromEntries(
@@ -71,6 +101,8 @@ assert.equal(roundComplete(total5, players), false);
 assert.equal(roundComplete(total12, players), false);
 assert.equal(roundComplete(total19, players), false);
 assert.equal(roundComplete(unlimitedBidEntries, players), true);
+assert.equal(actualEditAllowed(total12, players, 'd', '3'), true);
+assert.equal(actualEditAllowed(total12, players, 'd', '4'), false);
 
 assert.throws(
   () => commitRound(newGame(5, players), 0, players, total5),
@@ -100,6 +132,8 @@ const largeBidRound = commitRound(
   unlimitedBidEntries,
 );
 assert.equal(largeBidRound[0].saved, true);
+assert.equal(cumulativeInTenths(largeBidRound, 'a', 'easy'), -840n);
+assert.equal(cumulativeInTenths(largeBidRound, 'a', 'hard'), -890n);
 
 // Non-four-player games never inherit the combined Actual Won target.
 const threePlayers = ['a', 'b', 'c'];
@@ -110,6 +144,10 @@ const threePlayerEntries = {
 };
 assert.equal(roundActualTotal(threePlayerEntries, threePlayers), 18n);
 assert.equal(roundComplete(threePlayerEntries, threePlayers), true);
+assert.equal(
+  actualEditAllowed(threePlayerEntries, threePlayers, 'a', '13'),
+  true,
+);
 const threePlayerGame = commitRound(
   newGame(3, threePlayers),
   0,
@@ -158,5 +196,5 @@ assert.throws(() =>
 );
 
 console.log(
-  'Passed: four-player-only Actual target of 13, non-four-player games without the target, unlimited bids, independent zeroed rounds, preserved totals, and 3/5/7-round games.',
+  'Passed: unchanged Easy scoring, exact Hard scoring, four-player Actual input cap/target, unlimited bids, independent rounds, preserved totals, and 3/5/7-round games.',
 );
